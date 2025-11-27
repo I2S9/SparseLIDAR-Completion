@@ -1,10 +1,27 @@
 # Core dependencies
-# PyTorch (install separately based on CUDA version)
-# MinkowskiEngine (install separately based on PyTorch and CUDA)
-# open3d
-# numpy
-# scipy
-# matplotlib
-# pyyaml
-# tqdm
+# Installed packages (Python 3.10)
+
+# Scientific computing
+numpy==2.2.6
+scipy==1.15.3
+matplotlib==3.10.7
+pyyaml==6.0.3
+tqdm==4.67.1
+
+# 3D processing
+open3d==0.19.0
+
+# Deep learning
+torch==2.9.1
+torchvision==0.24.1
+torchaudio==2.9.1
+ninja==1.13.0
+
+# MinkowskiEngine - NOT AVAILABLE ON WINDOWS
+# See MINKOWSKI_WINDOWS.md for alternatives (WSL2, Docker, etc.)
+# On Linux/WSL2:
+# pip install -U git+https://github.com/NVIDIA/MinkowskiEngine -v --no-deps
+
+# Note: PyTorch is installed in CPU mode. For CUDA support:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
