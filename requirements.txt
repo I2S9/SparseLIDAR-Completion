@@ -1,0 +1,10 @@
+# Core dependencies
+# PyTorch (install separately based on CUDA version)
+# MinkowskiEngine (install separately based on PyTorch and CUDA)
+# open3d
+# numpy
+# scipy
+# matplotlib
+# pyyaml
+# tqdm
+
