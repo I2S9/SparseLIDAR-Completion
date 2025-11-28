@@ -50,9 +50,38 @@ See `.cursorrules` for detailed architecture.
 
 ## Development Roadmap
 
-- Phase 1: Data and Visualization
-- Phase 2: Classical Baselines
-- Phase 3: Deep Learning Model
-- Phase 4: Metrics and Evaluation
-- Phase 5: Export and Web Visualization
+- Phase 1: Data and Visualization ✓
+- Phase 2: Classical Baselines ✓
+- Phase 3: Deep Learning Model ✓
+- Phase 4: Metrics and Evaluation ✓
+- Phase 5: Export and Web Visualization ✓
+
+## Demo - Before/After Comparison
+
+To run the interactive demo comparing partial input, Poisson reconstruction, and Deep Learning completion:
+
+1. Generate demo files:
+```bash
+conda activate sparse-lidar
+python backend/notebooks/create_demo_files.py
+```
+
+2. Copy files to frontend (if needed):
+```bash
+cp exports/*.ply frontend/public/exports/
+```
+
+3. Start web server:
+```bash
+cd frontend
+npm install  # First time only
+npm run dev
+```
+
+4. Open `http://localhost:5173/` in your browser
+
+The demo allows you to:
+- View partial input (red), Poisson reconstruction (cyan), and Deep Learning output (green)
+- Switch between individual views or side-by-side comparison
+- Interactively rotate, pan, and zoom in 3D
 

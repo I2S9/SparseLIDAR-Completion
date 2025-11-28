@@ -2,12 +2,12 @@
  * Main App component
  */
 
-import PointCloudViewer from './components/PointCloudViewer.jsx';
+import ComparisonViewer from './components/ComparisonViewer.jsx';
 
 function App() {
   return (
     <div className="App">
-      <PointCloudViewer />
+      <ComparisonViewer />
     </div>
   );
 }
