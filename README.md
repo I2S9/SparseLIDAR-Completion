@@ -88,23 +88,46 @@ The web interface will be available at `http://localhost:5173/`
 
 ### Generate Demo Files
 
+**Option 1: Mini Dataset (Recommended)**
+
+Generate a mini demonstration dataset with 3 simple objects (sphere, cube, torus):
+```bash
+conda activate sparse-lidar
+python backend/notebooks/create_demo_dataset.py
+```
+
+This creates:
+- Main demo files in `exports/` (used by the web interface)
+- Individual object files in `exports/sphere/`, `exports/cube/`, `exports/torus/`
+
+**Option 2: Simple Demo**
+
+Generate a single simple demo object:
 ```bash
 conda activate sparse-lidar
 python backend/notebooks/create_demo_files.py
 ```
 
-This creates PLY files in `exports/` directory.
+Both scripts create PLY files in `exports/` directory.
 
 ### Run Web Demo
 
-1. Copy files to frontend:
+1. Copy files to frontend (Windows PowerShell):
+```powershell
+if (-not (Test-Path "frontend\public\exports")) { New-Item -ItemType Directory -Path "frontend\public\exports" -Force | Out-Null }
+Copy-Item -Path "exports\*.ply" -Destination "frontend\public\exports\" -Force
+```
+
+Or on Linux/Mac:
 ```bash
+mkdir -p frontend/public/exports
 cp exports/*.ply frontend/public/exports/
 ```
 
 2. Start web server:
 ```bash
 cd frontend
+npm install  # First time only
 npm run dev
 ```
 
