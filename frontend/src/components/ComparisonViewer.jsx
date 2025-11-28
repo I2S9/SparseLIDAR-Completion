@@ -36,7 +36,7 @@ export default function ComparisonViewer() {
   });
   const [showNormals, setShowNormals] = useState(false);
   const normalsGroupRef = useRef(null);
-  const [pointSize, setPointSize] = useState(0.0175); // Default: middle of 0.01-0.025 range
+  const [pointSize, setPointSize] = useState(0.008); // Default: middle of 0.005-0.012 range
   const [showPoissonMesh, setShowPoissonMesh] = useState(false);
   const poissonMeshRef = useRef(null);
   const [showMetrics, setShowMetrics] = useState(false);
@@ -774,9 +774,9 @@ export default function ComparisonViewer() {
           </label>
           <input
             type="range"
-            min="0.01"
-            max="0.025"
-            step="0.001"
+            min="0.005"
+            max="0.012"
+            step="0.0005"
             value={pointSize}
             onChange={(e) => setPointSize(parseFloat(e.target.value))}
             style={{
@@ -789,8 +789,8 @@ export default function ComparisonViewer() {
             }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.6, marginTop: '5px' }}>
-            <span>0.01</span>
-            <span>0.025</span>
+            <span>0.005</span>
+            <span>0.012</span>
           </div>
         </div>
 

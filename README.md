@@ -110,6 +110,22 @@ python backend/notebooks/create_demo_files.py
 
 Both scripts create PLY files in `exports/` directory.
 
+### Compute Metrics
+
+After generating demo files, compute evaluation metrics:
+
+```bash
+conda activate sparse-lidar
+python backend/notebooks/compute_metrics.py
+```
+
+This computes Chamfer Distance, F-score, and Normal Angle Error for:
+- Partial (baseline)
+- Poisson reconstruction
+- Deep Learning (placeholder)
+
+Results are exported to `frontend/public/metrics.json` for display in the web interface.
+
 ### Run Web Demo
 
 1. Copy files to frontend (Windows PowerShell):
