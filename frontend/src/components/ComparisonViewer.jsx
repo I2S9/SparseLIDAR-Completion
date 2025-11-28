@@ -36,6 +36,7 @@ export default function ComparisonViewer() {
   });
   const [showNormals, setShowNormals] = useState(false);
   const normalsGroupRef = useRef(null);
+  const [pointSize, setPointSize] = useState(0.0175); // Default: middle of 0.01-0.025 range
 
   useEffect(() => {
     // Initialize Three.js scene
@@ -101,6 +102,13 @@ export default function ComparisonViewer() {
       renderer.dispose();
     };
   }, []);
+
+  // Load demo files automatically on mount
+  useEffect(() => {
+    if (sceneRef.current) {
+      loadDefaultFiles();
+    }
+  }, [sceneRef.current]);
 
   // Create normals visualization
   const createNormalsGroup = (points, normalsArray, color) => {
@@ -212,6 +220,22 @@ export default function ComparisonViewer() {
     }
   }, [showNormals, viewMode, loadedClouds, normals]);
 
+  // Update point sizes when pointSize changes
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    
+    sceneRef.current.traverse((child) => {
+      if (child instanceof THREE.Points && child.material instanceof THREE.PointsMaterial) {
+        if (viewMode === VIEW_MODES.SIDE_BY_SIDE) {
+          child.material.size = pointSize * 0.8;
+        } else {
+          child.material.size = pointSize;
+        }
+        child.material.needsUpdate = true;
+      }
+    });
+  }, [pointSize, viewMode]);
+
   // Update scene when view mode or loaded clouds change
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -234,7 +258,7 @@ export default function ComparisonViewer() {
       const partial = loadedClouds.partial.clone();
       partial.material = new THREE.PointsMaterial({
         color: 0xff6b6b,
-        size: 0.01,
+        size: pointSize,
         sizeAttenuation: true
       });
       sceneRef.current.add(partial);
@@ -242,7 +266,7 @@ export default function ComparisonViewer() {
       const poisson = loadedClouds.poisson.clone();
       poisson.material = new THREE.PointsMaterial({
         color: 0x4ecdc4,
-        size: 0.01,
+        size: pointSize,
         sizeAttenuation: true
       });
       sceneRef.current.add(poisson);
@@ -250,18 +274,19 @@ export default function ComparisonViewer() {
       const dl = loadedClouds.deepLearning.clone();
       dl.material = new THREE.PointsMaterial({
         color: 0x95e1d3,
-        size: 0.01,
+        size: pointSize,
         sizeAttenuation: true
       });
       sceneRef.current.add(dl);
     } else if (viewMode === VIEW_MODES.SIDE_BY_SIDE) {
-      // Side by side view
+      // Side by side view - slightly smaller for better visibility
+      const sideBySideSize = pointSize * 0.8;
       if (loadedClouds.partial) {
         const partial = loadedClouds.partial.clone();
         partial.position.x = -0.5;
         partial.material = new THREE.PointsMaterial({
           color: 0xff6b6b,
-          size: 0.008,
+          size: sideBySideSize,
           sizeAttenuation: true
         });
         sceneRef.current.add(partial);
@@ -271,7 +296,7 @@ export default function ComparisonViewer() {
         poisson.position.x = 0;
         poisson.material = new THREE.PointsMaterial({
           color: 0x4ecdc4,
-          size: 0.008,
+          size: sideBySideSize,
           sizeAttenuation: true
         });
         sceneRef.current.add(poisson);
@@ -281,13 +306,13 @@ export default function ComparisonViewer() {
         dl.position.x = 0.5;
         dl.material = new THREE.PointsMaterial({
           color: 0x95e1d3,
-          size: 0.008,
+          size: sideBySideSize,
           sizeAttenuation: true
         });
         sceneRef.current.add(dl);
       }
     }
-  }, [viewMode, loadedClouds]);
+  }, [viewMode, loadedClouds, pointSize]);
 
   const loadPointCloud = async (file, type) => {
     setIsLoading(true);
@@ -411,8 +436,11 @@ export default function ComparisonViewer() {
           borderRadius: '10px',
           color: 'white',
           fontFamily: 'Arial, sans-serif',
-          minWidth: '300px',
-          maxWidth: '400px'
+          minWidth: '320px',
+          maxWidth: '420px',
+          maxHeight: 'calc(100vh - 40px)',
+          overflowY: 'auto',
+          overflowX: 'hidden'
         }}
       >
         <h1 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: 'bold', color: '#4ecdc4' }}>
@@ -433,7 +461,7 @@ export default function ComparisonViewer() {
             width: '100%',
             padding: '12px',
             marginBottom: '20px',
-            background: isLoading ? '#666' : '#4CAF50',
+            background: isLoading ? '#666' : '#333',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -449,82 +477,87 @@ export default function ComparisonViewer() {
         <div style={{ marginBottom: '20px' }}>
           <h3 style={{ fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>Load Files:</h3>
           
-          <div style={{ marginBottom: '10px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', opacity: 0.8 }}>
-              Partial Input (Red)
-            </label>
-            <label
-              style={{
-                display: 'inline-block',
-                padding: '8px 15px',
-                background: '#ff6b6b',
-                color: 'white',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-            >
-              Choose File
-              <input
-                type="file"
-                accept=".ply"
-                onChange={(e) => handleFileSelect(e, 'partial')}
-                disabled={isLoading}
-                style={{ display: 'none' }}
-              />
-            </label>
-          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1', minWidth: '100px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
+                Partial (Red)
+              </label>
+              <label
+                style={{
+                  display: 'block',
+                  padding: '8px 12px',
+                  background: '#ff6b6b',
+                  color: 'white',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'center'
+                }}
+              >
+                Choose File
+                <input
+                  type="file"
+                  accept=".ply"
+                  onChange={(e) => handleFileSelect(e, 'partial')}
+                  disabled={isLoading}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
 
-          <div style={{ marginBottom: '10px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', opacity: 0.8 }}>
-              Poisson (Cyan)
-            </label>
-            <label
-              style={{
-                display: 'inline-block',
-                padding: '8px 15px',
-                background: '#4ecdc4',
-                color: 'white',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-            >
-              Choose File
-              <input
-                type="file"
-                accept=".ply"
-                onChange={(e) => handleFileSelect(e, 'poisson')}
-                disabled={isLoading}
-                style={{ display: 'none' }}
-              />
-            </label>
-          </div>
+            <div style={{ flex: '1', minWidth: '100px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
+                Poisson (Cyan)
+              </label>
+              <label
+                style={{
+                  display: 'block',
+                  padding: '8px 12px',
+                  background: '#4ecdc4',
+                  color: 'white',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'center'
+                }}
+              >
+                Choose File
+                <input
+                  type="file"
+                  accept=".ply"
+                  onChange={(e) => handleFileSelect(e, 'poisson')}
+                  disabled={isLoading}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
 
-          <div style={{ marginBottom: '10px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', opacity: 0.8 }}>
-              Deep Learning (Green)
-            </label>
-            <label
-              style={{
-                display: 'inline-block',
-                padding: '8px 15px',
-                background: '#95e1d3',
-                color: 'white',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-            >
-              Choose File
-              <input
-                type="file"
-                accept=".ply"
-                onChange={(e) => handleFileSelect(e, 'deepLearning')}
-                disabled={isLoading}
-                style={{ display: 'none' }}
-              />
-            </label>
+            <div style={{ flex: '1', minWidth: '100px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
+                DL (Green)
+              </label>
+              <label
+                style={{
+                  display: 'block',
+                  padding: '8px 12px',
+                  background: '#95e1d3',
+                  color: 'white',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'center'
+                }}
+              >
+                Choose File
+                <input
+                  type="file"
+                  accept=".ply"
+                  onChange={(e) => handleFileSelect(e, 'deepLearning')}
+                  disabled={isLoading}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -546,6 +579,33 @@ export default function ComparisonViewer() {
           >
             {showNormals ? 'Hide Normals' : 'Show Normals'}
           </button>
+        </div>
+
+        {/* Point size slider */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>
+            Point Size: {pointSize.toFixed(3)}
+          </label>
+          <input
+            type="range"
+            min="0.01"
+            max="0.025"
+            step="0.001"
+            value={pointSize}
+            onChange={(e) => setPointSize(parseFloat(e.target.value))}
+            style={{
+              width: '100%',
+              height: '6px',
+              borderRadius: '3px',
+              background: '#333',
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.6, marginTop: '5px' }}>
+            <span>0.01</span>
+            <span>0.025</span>
+          </div>
         </div>
 
         {/* View mode selector */}
@@ -633,19 +693,6 @@ export default function ComparisonViewer() {
           <p style={{ margin: '3px 0' }}>• Left-click + drag: Rotate</p>
           <p style={{ margin: '3px 0' }}>• Right-click + drag: Pan</p>
           <p style={{ margin: '3px 0' }}>• Scroll: Zoom</p>
-        </div>
-
-        {/* Status */}
-        <div style={{ marginTop: '15px', fontSize: '11px', opacity: 0.6 }}>
-          <p style={{ margin: '3px 0' }}>
-            Partial: {loadedClouds.partial ? '✓' : '✗'}
-          </p>
-          <p style={{ margin: '3px 0' }}>
-            Poisson: {loadedClouds.poisson ? '✓' : '✗'}
-          </p>
-          <p style={{ margin: '3px 0' }}>
-            Deep Learning: {loadedClouds.deepLearning ? '✓' : '✗'}
-          </p>
         </div>
       </div>
     </div>
