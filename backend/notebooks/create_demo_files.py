@@ -44,7 +44,9 @@ def create_demo_files():
         direction=[1, 0, 0],
         max_angle=45.0
     )
-    print(f"   Partial cloud: {len(pcd_partial.points)} points")
+    # Estimate normals for partial input
+    pcd_partial = estimate_normals_pca(pcd_partial, k=30, orient_normals=True)
+    print(f"   Partial cloud: {len(pcd_partial.points)} points (with normals)")
     
     # Poisson reconstruction
     print("\n3. Creating Poisson reconstruction...")
@@ -58,13 +60,17 @@ def create_demo_files():
     
     # Convert Poisson mesh to point cloud for comparison
     pcd_poisson = mesh_to_point_cloud(poisson_mesh, number_of_points=len(pcd_full.points))
-    print(f"   Poisson point cloud: {len(pcd_poisson.points)} points")
+    # Estimate normals for Poisson point cloud
+    pcd_poisson = estimate_normals_pca(pcd_poisson, k=30, orient_normals=True)
+    print(f"   Poisson point cloud: {len(pcd_poisson.points)} points (with normals)")
     
     # For Deep Learning output, use full as placeholder
     # (In real scenario, this would be model prediction)
     print("\n4. Creating Deep Learning output (placeholder)...")
     pcd_dl = pcd_full  # Placeholder - in real scenario, use model prediction
-    print(f"   DL output: {len(pcd_dl.points)} points")
+    # Estimate normals for DL output
+    pcd_dl = estimate_normals_pca(pcd_dl, k=30, orient_normals=True)
+    print(f"   DL output: {len(pcd_dl.points)} points (with normals)")
     
     # Export all files
     print("\n5. Exporting files...")

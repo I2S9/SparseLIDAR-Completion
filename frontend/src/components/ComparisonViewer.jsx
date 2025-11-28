@@ -29,6 +29,13 @@ export default function ComparisonViewer() {
     poisson: null,
     deepLearning: null
   });
+  const [normals, setNormals] = useState({
+    partial: null,
+    poisson: null,
+    deepLearning: null
+  });
+  const [showNormals, setShowNormals] = useState(false);
+  const normalsGroupRef = useRef(null);
 
   useEffect(() => {
     // Initialize Three.js scene
@@ -94,6 +101,116 @@ export default function ComparisonViewer() {
       renderer.dispose();
     };
   }, []);
+
+  // Create normals visualization
+  const createNormalsGroup = (points, normalsArray, color) => {
+    if (!normalsArray || normalsArray.length === 0) return null;
+    
+    const group = new THREE.Group();
+    const positions = points.geometry.attributes.position.array;
+    const numPoints = positions.length / 3;
+    
+    // Sample points to avoid too many arrows (every 10th point)
+    const sampleRate = Math.max(1, Math.floor(numPoints / 500));
+    const normalLength = 0.05;
+    
+    for (let i = 0; i < numPoints; i += sampleRate) {
+      const idx = i * 3;
+      const x = positions[idx];
+      const y = positions[idx + 1];
+      const z = positions[idx + 2];
+      
+      const nx = normalsArray[idx];
+      const ny = normalsArray[idx + 1];
+      const nz = normalsArray[idx + 2];
+      
+      // Skip if normal is zero
+      if (nx === 0 && ny === 0 && nz === 0) continue;
+      
+      const origin = new THREE.Vector3(x, y, z);
+      const direction = new THREE.Vector3(nx, ny, nz).normalize();
+      
+      const arrow = new THREE.ArrowHelper(
+        direction,
+        origin,
+        normalLength,
+        color,
+        normalLength * 0.3,
+        normalLength * 0.2
+      );
+      
+      group.add(arrow);
+    }
+    
+    return group;
+  };
+
+  // Update normals visualization when showNormals or viewMode changes
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    
+    // Remove existing normals group
+    if (normalsGroupRef.current) {
+      sceneRef.current.remove(normalsGroupRef.current);
+      normalsGroupRef.current = null;
+    }
+    
+    // Add normals if enabled
+    if (showNormals) {
+      const group = new THREE.Group();
+      let hasNormals = false;
+      
+      if (viewMode === VIEW_MODES.PARTIAL && loadedClouds.partial && normals.partial) {
+        const normalsGroup = createNormalsGroup(loadedClouds.partial, normals.partial, 0xff6b6b);
+        if (normalsGroup) {
+          group.add(normalsGroup);
+          hasNormals = true;
+        }
+      } else if (viewMode === VIEW_MODES.POISSON && loadedClouds.poisson && normals.poisson) {
+        const normalsGroup = createNormalsGroup(loadedClouds.poisson, normals.poisson, 0x4ecdc4);
+        if (normalsGroup) {
+          group.add(normalsGroup);
+          hasNormals = true;
+        }
+      } else if (viewMode === VIEW_MODES.DEEP_LEARNING && loadedClouds.deepLearning && normals.deepLearning) {
+        const normalsGroup = createNormalsGroup(loadedClouds.deepLearning, normals.deepLearning, 0x95e1d3);
+        if (normalsGroup) {
+          group.add(normalsGroup);
+          hasNormals = true;
+        }
+      } else if (viewMode === VIEW_MODES.SIDE_BY_SIDE) {
+        if (loadedClouds.partial && normals.partial) {
+          const normalsGroup = createNormalsGroup(loadedClouds.partial, normals.partial, 0xff6b6b);
+          if (normalsGroup) {
+            normalsGroup.position.x = -0.5;
+            group.add(normalsGroup);
+            hasNormals = true;
+          }
+        }
+        if (loadedClouds.poisson && normals.poisson) {
+          const normalsGroup = createNormalsGroup(loadedClouds.poisson, normals.poisson, 0x4ecdc4);
+          if (normalsGroup) {
+            normalsGroup.position.x = 0;
+            group.add(normalsGroup);
+            hasNormals = true;
+          }
+        }
+        if (loadedClouds.deepLearning && normals.deepLearning) {
+          const normalsGroup = createNormalsGroup(loadedClouds.deepLearning, normals.deepLearning, 0x95e1d3);
+          if (normalsGroup) {
+            normalsGroup.position.x = 0.5;
+            group.add(normalsGroup);
+            hasNormals = true;
+          }
+        }
+      }
+      
+      if (hasNormals) {
+        normalsGroupRef.current = group;
+        sceneRef.current.add(group);
+      }
+    }
+  }, [showNormals, viewMode, loadedClouds, normals]);
 
   // Update scene when view mode or loaded clouds change
   useEffect(() => {
@@ -177,7 +294,7 @@ export default function ComparisonViewer() {
     setError(null);
 
     try {
-      const points = await loadPLYFromFile(file);
+      const { points, normals: normalsArray } = await loadPLYFromFile(file);
 
       // Center and scale
       const box = new THREE.Box3().setFromObject(points);
@@ -194,12 +311,18 @@ export default function ComparisonViewer() {
         [type]: points
       }));
 
+      // Store normals if present
+      setNormals(prev => ({
+        ...prev,
+        [type]: normalsArray
+      }));
+
       // Reset camera
       cameraRef.current.position.set(0, 0, 2);
       controlsRef.current.target.set(0, 0, 0);
       controlsRef.current.update();
 
-      console.log(`Loaded ${type}: ${points.geometry.attributes.position.count} points`);
+      console.log(`Loaded ${type}: ${points.geometry.attributes.position.count} points${normalsArray ? ' (with normals)' : ''}`);
     } catch (err) {
       console.error('Error loading point cloud:', err);
       setError(`Failed to load ${type}: ${err.message}`);
@@ -231,10 +354,11 @@ export default function ComparisonViewer() {
 
       // Load files sequentially
       const newLoadedClouds = { ...loadedClouds };
+      const newNormals = { ...normals };
       
       for (const [type, path] of Object.entries(files)) {
         try {
-          const points = await loadPLY(path);
+          const { points, normals: normalsArray } = await loadPLY(path);
           
           // Center and scale
           const box = new THREE.Box3().setFromObject(points);
@@ -246,13 +370,15 @@ export default function ComparisonViewer() {
           points.geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
 
           newLoadedClouds[type] = points;
+          newNormals[type] = normalsArray;
         } catch (err) {
           console.warn(`Could not load ${type} from ${path}:`, err);
         }
       }
 
-      // Update state with all loaded clouds
+      // Update state with all loaded clouds and normals
       setLoadedClouds(newLoadedClouds);
+      setNormals(newNormals);
 
       // Set default view if any cloud was loaded
       const hasAnyCloud = Object.values(newLoadedClouds).some(cloud => cloud !== null);
@@ -400,6 +526,26 @@ export default function ComparisonViewer() {
               />
             </label>
           </div>
+        </div>
+
+        {/* Show normals button */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={() => setShowNormals(!showNormals)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: showNormals ? '#6c5ce7' : '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}
+          >
+            {showNormals ? 'Hide Normals' : 'Show Normals'}
+          </button>
         </div>
 
         {/* View mode selector */}

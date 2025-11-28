@@ -59,12 +59,17 @@ def save_point_cloud_ply(points: Union[np.ndarray, o3d.geometry.PointCloud],
         
         # Update point cloud
         pcd.points = o3d.utility.Vector3dVector(points_normalized)
+        
+        # Preserve normals after normalization (they don't need to be transformed)
+        if pcd.has_normals():
+            normals = np.asarray(pcd.normals)
+            pcd.normals = o3d.utility.Vector3dVector(normals)
     
     # Create directory if needed
     filename.parent.mkdir(parents=True, exist_ok=True)
     
-    # Export to PLY
-    success = o3d.io.write_point_cloud(str(filename), pcd)
+    # Export to PLY (Open3D automatically includes normals if present)
+    success = o3d.io.write_point_cloud(str(filename), pcd, write_ascii=False)
     
     if not success:
         raise IOError(f"Failed to write point cloud to {filename}")

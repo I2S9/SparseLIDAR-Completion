@@ -7,9 +7,9 @@ import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 /**
- * Load a PLY file and return a Three.js Points object
+ * Load a PLY file and return a Three.js Points object with normals
  * @param {string} url - URL or path to PLY file
- * @returns {Promise<THREE.Points>} Promise resolving to Points object
+ * @returns {Promise<{points: THREE.Points, normals: Float32Array|null}>} Promise resolving to Points object and normals
  */
 export async function loadPLY(url) {
   return new Promise((resolve, reject) => {
@@ -26,7 +26,14 @@ export async function loadPLY(url) {
         
         // Create points object
         const points = new THREE.Points(geometry, material);
-        resolve(points);
+        
+        // Extract normals if present
+        let normals = null;
+        if (geometry.attributes.normal) {
+          normals = geometry.attributes.normal.array;
+        }
+        
+        resolve({ points, normals });
       },
       (progress) => {
         // Progress callback
@@ -65,7 +72,7 @@ export async function loadGLB(url) {
 /**
  * Load a PLY file from File object
  * @param {File} file - File object
- * @returns {Promise<THREE.Points>} Promise resolving to Points object
+ * @returns {Promise<{points: THREE.Points, normals: Float32Array|null}>} Promise resolving to Points object and normals
  */
 export async function loadPLYFromFile(file) {
   return new Promise((resolve, reject) => {
@@ -81,7 +88,14 @@ export async function loadPLYFromFile(file) {
           sizeAttenuation: true
         });
         const points = new THREE.Points(geometry, material);
-        resolve(points);
+        
+        // Extract normals if present
+        let normals = null;
+        if (geometry.attributes.normal) {
+          normals = geometry.attributes.normal.array;
+        }
+        
+        resolve({ points, normals });
       } catch (error) {
         reject(error);
       }
