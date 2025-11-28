@@ -229,7 +229,9 @@ export default function ComparisonViewer() {
         deepLearning: '/exports/output_predicted.ply'
       };
 
-      // Load files
+      // Load files sequentially
+      const newLoadedClouds = { ...loadedClouds };
+      
       for (const [type, path] of Object.entries(files)) {
         try {
           const points = await loadPLY(path);
@@ -243,19 +245,21 @@ export default function ComparisonViewer() {
           points.geometry.translate(-center.x, -center.y, -center.z);
           points.geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
 
-          setLoadedClouds(prev => ({
-            ...prev,
-            [type]: points
-          }));
+          newLoadedClouds[type] = points;
         } catch (err) {
           console.warn(`Could not load ${type} from ${path}:`, err);
-          setError(`Could not load ${type}. Please use file upload buttons.`);
         }
       }
 
-      // Set default view
-      if (loadedClouds.partial || loadedClouds.poisson || loadedClouds.deepLearning) {
+      // Update state with all loaded clouds
+      setLoadedClouds(newLoadedClouds);
+
+      // Set default view if any cloud was loaded
+      const hasAnyCloud = Object.values(newLoadedClouds).some(cloud => cloud !== null);
+      if (hasAnyCloud) {
         setViewMode(VIEW_MODES.SIDE_BY_SIDE);
+      } else {
+        setError('Could not load demo files. Please use file upload buttons.');
       }
     } catch (err) {
       setError(`Failed to load default files: ${err.message}`);
