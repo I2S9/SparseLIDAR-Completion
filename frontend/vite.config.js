@@ -8,6 +8,14 @@ export default defineConfig({
     host: '0.0.0.0',
     open: '/',
     strictPort: true
-  }
+  },
+  build: {
+    // Ensure public directory is copied correctly
+    copyPublicDir: true,
+    // Output directory
+    outDir: 'dist'
+  },
+  // Ensure public assets are served correctly
+  publicDir: 'public'
 })
 
