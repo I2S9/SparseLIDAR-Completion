@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import open3d as o3d
+import json
 from typing import Dict, List, Tuple, Optional
 from tabulate import tabulate
 
@@ -357,6 +358,48 @@ def print_results_table(results: Dict[str, Dict[str, float]]):
     print(tabulate(table_data, headers=headers, tablefmt="grid"))
     print("\nNote: CD and Normal Error - lower is better; F-score - higher is better")
     print("=" * 60)
+
+
+def export_metrics_json(results: Dict[str, Dict[str, float]], 
+                       output_path: str = "frontend/public/metrics.json"):
+    """
+    Export metrics to JSON file for frontend display.
+    
+    Args:
+        results: Dictionary with results for each method
+        output_path: Path to output JSON file
+    """
+    # Convert to frontend-friendly format
+    metrics_data = {}
+    
+    for method, metrics in results.items():
+        # Map method names to frontend keys
+        if method == 'Partial':
+            key = 'partial'
+        elif method == 'Poisson':
+            key = 'poisson'
+        elif method == 'Sparse UNet':
+            key = 'deep'
+        else:
+            continue  # Skip PCA Normals for now
+        
+        cd = metrics.get('chamfer_distance')
+        f_score_val = metrics.get('f_score')
+        
+        metrics_data[key] = {
+            'cd': round(cd, 6) if cd is not None else None,
+            'fscore': round(f_score_val, 4) if f_score_val is not None else None
+        }
+    
+    # Create output directory if needed
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write JSON file
+    with open(output_path, 'w') as f:
+        json.dump(metrics_data, f, indent=2)
+    
+    print(f"\nMetrics exported to: {output_path.absolute()}")
 
 
 def evaluate_on_sample(pcd_full: o3d.geometry.PointCloud,

@@ -39,6 +39,8 @@ export default function ComparisonViewer() {
   const [pointSize, setPointSize] = useState(0.0175); // Default: middle of 0.01-0.025 range
   const [showPoissonMesh, setShowPoissonMesh] = useState(false);
   const poissonMeshRef = useRef(null);
+  const [showMetrics, setShowMetrics] = useState(false);
+  const [metrics, setMetrics] = useState(null);
 
   useEffect(() => {
     // Initialize Three.js scene
@@ -653,6 +655,117 @@ export default function ComparisonViewer() {
             {showPoissonMesh ? 'Hide Poisson Mesh' : 'Show Poisson Mesh (Wireframe)'}
           </button>
         </div>
+
+        {/* Compare Metrics button */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={async () => {
+              if (!showMetrics) {
+                try {
+                  const response = await fetch('/metrics.json');
+                  
+                  // Check if response is actually JSON
+                  const contentType = response.headers.get('content-type');
+                  if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Response is not JSON. File may not exist. Run: python backend/notebooks/generate_metrics.py');
+                  }
+                  
+                  if (response.ok) {
+                    const text = await response.text();
+                    
+                    // Check if response is empty or HTML
+                    if (!text || text.trim().startsWith('<')) {
+                      throw new Error('metrics.json not found. Run: python backend/notebooks/generate_metrics.py');
+                    }
+                    
+                    try {
+                      const data = JSON.parse(text);
+                      setMetrics(data);
+                      setShowMetrics(true);
+                      setError(null);
+                    } catch (parseErr) {
+                      throw new Error(`Invalid JSON format: ${parseErr.message}. Regenerate metrics.json`);
+                    }
+                  } else {
+                    throw new Error(`HTTP ${response.status}: Could not load metrics.json. Run: python backend/notebooks/generate_metrics.py`);
+                  }
+                } catch (err) {
+                  setError(`Failed to load metrics: ${err.message}`);
+                  setShowMetrics(false);
+                }
+              } else {
+                setShowMetrics(false);
+              }
+            }}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: showMetrics ? '#6c5ce7' : '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}
+          >
+            {showMetrics ? 'Hide Metrics' : 'Compare Metrics'}
+          </button>
+        </div>
+
+        {/* Metrics display */}
+        {showMetrics && metrics && (
+          <div style={{ 
+            marginBottom: '20px', 
+            padding: '15px', 
+            background: 'rgba(255, 255, 255, 0.1)', 
+            borderRadius: '6px',
+            fontSize: '12px'
+          }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>
+              Evaluation Metrics
+            </h3>
+            {Object.entries(metrics).map(([method, data]) => {
+              const methodName = method === 'partial' ? 'Partial' : 
+                                method === 'poisson' ? 'Poisson' : 
+                                method === 'deep' ? 'Deep Learning' : method;
+              
+              // Find best values for highlighting
+              const allCds = Object.values(metrics).map(m => m.cd).filter(v => v !== null);
+              const allFscores = Object.values(metrics).map(m => m.fscore).filter(v => v !== null);
+              const bestCd = Math.min(...allCds);
+              const bestFscore = Math.max(...allFscores);
+              
+              const isBestCd = data.cd !== null && data.cd === bestCd;
+              const isBestFscore = data.fscore !== null && data.fscore === bestFscore;
+              
+              return (
+                <div key={method} style={{ marginBottom: '10px', padding: '8px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '4px' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '5px', color: method === 'partial' ? '#ff6b6b' : method === 'poisson' ? '#4ecdc4' : '#95e1d3' }}>
+                    {methodName}
+                  </div>
+                  <div style={{ fontSize: '11px', lineHeight: '1.6' }}>
+                    <div>
+                      CD: <span style={{ color: isBestCd ? '#4CAF50' : 'inherit', fontWeight: isBestCd ? 'bold' : 'normal' }}>
+                        {data.cd !== null ? data.cd.toFixed(6) : 'N/A'}
+                      </span>
+                      {isBestCd && <span style={{ color: '#4CAF50', marginLeft: '5px' }}>✓ Best</span>}
+                    </div>
+                    <div>
+                      F-score: <span style={{ color: isBestFscore ? '#4CAF50' : 'inherit', fontWeight: isBestFscore ? 'bold' : 'normal' }}>
+                        {data.fscore !== null ? data.fscore.toFixed(4) : 'N/A'}
+                      </span>
+                      {isBestFscore && <span style={{ color: '#4CAF50', marginLeft: '5px' }}>✓ Best</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ fontSize: '10px', opacity: 0.7, marginTop: '10px', fontStyle: 'italic' }}>
+              Lower CD is better • Higher F-score is better
+            </div>
+          </div>
+        )}
 
         {/* Point size slider */}
         <div style={{ marginBottom: '20px' }}>
