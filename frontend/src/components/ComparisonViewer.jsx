@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { loadPLY, loadPLYFromFile } from '../utils/loaders.js';
+import { loadPLY, loadPLYFromFile, loadPLYMesh } from '../utils/loaders.js';
 
 const VIEW_MODES = {
   PARTIAL: 'partial',
@@ -37,6 +37,8 @@ export default function ComparisonViewer() {
   const [showNormals, setShowNormals] = useState(false);
   const normalsGroupRef = useRef(null);
   const [pointSize, setPointSize] = useState(0.0175); // Default: middle of 0.01-0.025 range
+  const [showPoissonMesh, setShowPoissonMesh] = useState(false);
+  const poissonMeshRef = useRef(null);
 
   useEffect(() => {
     // Initialize Three.js scene
@@ -236,6 +238,38 @@ export default function ComparisonViewer() {
     });
   }, [pointSize, viewMode]);
 
+  // Update Poisson mesh wireframe visibility
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    
+    // Remove all existing Poisson meshes from scene
+    const meshesToRemove = [];
+    sceneRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material && child.material.wireframe) {
+        meshesToRemove.push(child);
+      }
+    });
+    meshesToRemove.forEach(mesh => {
+      sceneRef.current.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    });
+    
+    // Add mesh if enabled and mesh is loaded
+    if (showPoissonMesh && poissonMeshRef.current) {
+      // Only show in Poisson or Side by Side modes
+      if (viewMode === VIEW_MODES.POISSON || viewMode === VIEW_MODES.SIDE_BY_SIDE) {
+        const mesh = poissonMeshRef.current.clone();
+        
+        if (viewMode === VIEW_MODES.SIDE_BY_SIDE) {
+          mesh.position.x = 0; // Center position for Poisson in side-by-side
+        }
+        
+        sceneRef.current.add(mesh);
+      }
+    }
+  }, [showPoissonMesh, viewMode]);
+
   // Update scene when view mode or loaded clouds change
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -404,6 +438,25 @@ export default function ComparisonViewer() {
       // Update state with all loaded clouds and normals
       setLoadedClouds(newLoadedClouds);
       setNormals(newNormals);
+
+      // Try to load Poisson mesh
+      try {
+        const mesh = await loadPLYMesh('/exports/poisson_mesh.ply');
+        
+        // Center and scale mesh (same as point clouds)
+        const box = new THREE.Box3().setFromObject(mesh);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        mesh.geometry.translate(-center.x, -center.y, -center.z);
+        mesh.geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
+        
+        poissonMeshRef.current = mesh;
+        console.log('Poisson mesh loaded successfully');
+      } catch (err) {
+        console.warn('Could not load Poisson mesh:', err);
+      }
 
       // Set default view if any cloud was loaded
       const hasAnyCloud = Object.values(newLoadedClouds).some(cloud => cloud !== null);
@@ -578,6 +631,26 @@ export default function ComparisonViewer() {
             }}
           >
             {showNormals ? 'Hide Normals' : 'Show Normals'}
+          </button>
+        </div>
+
+        {/* Show Poisson mesh wireframe button */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={() => setShowPoissonMesh(!showPoissonMesh)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: showPoissonMesh ? '#4ecdc4' : '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}
+          >
+            {showPoissonMesh ? 'Hide Poisson Mesh' : 'Show Poisson Mesh (Wireframe)'}
           </button>
         </div>
 

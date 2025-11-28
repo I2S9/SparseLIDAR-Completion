@@ -47,6 +47,40 @@ export async function loadPLY(url) {
 }
 
 /**
+ * Load a PLY mesh file (with faces) and return a Three.js Mesh object
+ * @param {string} url - URL or path to PLY file
+ * @returns {Promise<THREE.Mesh>} Promise resolving to Mesh object
+ */
+export async function loadPLYMesh(url) {
+  return new Promise((resolve, reject) => {
+    const loader = new PLYLoader();
+    loader.load(
+      url,
+      (geometry) => {
+        // Check if geometry has faces (index attribute)
+        if (geometry.index && geometry.index.count > 0) {
+          // It's a mesh with faces
+          const material = new THREE.MeshBasicMaterial({
+            wireframe: true,
+            color: 0x4ecdc4
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          resolve(mesh);
+        } else {
+          reject(new Error('PLY file does not contain mesh faces'));
+        }
+      },
+      (progress) => {
+        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+      },
+      (error) => {
+        reject(error);
+      }
+    );
+  });
+}
+
+/**
  * Load a GLB/GLTF file
  * @param {string} url - URL or path to GLB/GLTF file
  * @returns {Promise<THREE.Group>} Promise resolving to Group object
