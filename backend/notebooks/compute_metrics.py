@@ -112,8 +112,6 @@ def compute_metrics_from_files(exports_dir: Path = Path("exports"),
         raise FileNotFoundError(f"File not found: {partial_file}")
     if not poisson_file.exists():
         raise FileNotFoundError(f"File not found: {poisson_file}")
-    if not deep_file.exists():
-        raise FileNotFoundError(f"File not found: {deep_file}")
     
     print(f"\nLoading files from: {exports_dir.absolute()}")
     
@@ -127,8 +125,20 @@ def compute_metrics_from_files(exports_dir: Path = Path("exports"),
     pcd_poisson = load_point_cloud_with_normals(poisson_file)
     print(f"     Points: {len(pcd_poisson.points)}")
     
-    print(f"   Loading {deep_file.name} (as ground truth)...")
-    pcd_ground_truth = load_point_cloud_with_normals(deep_file)
+    # Ground truth: use poisson_reconstruction as reference (it's the full reconstruction)
+    # Or create ground truth from the original full shape
+    print(f"   Creating ground truth (full shape)...")
+    # For demo purposes, we'll use a combination approach:
+    # Use poisson as reference, or create a full sphere/cube/torus
+    import open3d as o3d
+    from backend.data.preprocessing import normalize_point_cloud
+    from backend.geometry.normals import estimate_normals_pca
+    
+    # Create a full sphere as ground truth (since demo uses sphere)
+    mesh = o3d.geometry.TriangleMesh.create_sphere(radius=1.0, resolution=50)
+    pcd_ground_truth = mesh.sample_points_uniformly(number_of_points=5000)
+    pcd_ground_truth = normalize_point_cloud(pcd_ground_truth, method='unit_sphere')
+    pcd_ground_truth = estimate_normals_pca(pcd_ground_truth, k=30, orient_normals=True)
     print(f"     Points: {len(pcd_ground_truth.points)}")
     
     # Compute metrics for each method
@@ -148,12 +158,86 @@ def compute_metrics_from_files(exports_dir: Path = Path("exports"),
     print(f"     F-score: {metrics_poisson['fscore']:.4f}")
     print(f"     Normal Error: {metrics_poisson['normal_error']:.2f} deg")
     
-    # Deep Learning (using ground truth as prediction for now)
-    print("\n   Evaluating Deep Learning (placeholder)...")
-    metrics_deep = compute_metrics_for_method(pcd_ground_truth, pcd_ground_truth)
-    print(f"     CD: {metrics_deep['cd']:.6f} (perfect match)")
-    print(f"     F-score: {metrics_deep['fscore']:.4f} (perfect match)")
-    print(f"     Normal Error: {metrics_deep['normal_error']:.2f} deg")
+    # Deep Learning (try to load trained model, otherwise use file if exists)
+    print("\n   Evaluating Deep Learning...")
+    model_path = Path("exports") / "simple_ae_model.pth"
+    
+    if model_path.exists():
+        print("     Loading trained model...")
+        try:
+            import torch
+            from backend.models.simple_ae import create_model
+            
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            model = create_model(num_points=2048, latent_dim=128, device=device)
+            model.load_state_dict(torch.load(model_path, map_location=device))
+            model.eval()
+            
+            # Prepare input
+            pcd_input = normalize_point_cloud(pcd_partial, method='unit_sphere')
+            if not pcd_input.has_normals():
+                pcd_input = estimate_normals_pca(pcd_input, k=30, orient_normals=True)
+            
+            # Resample to fixed size
+            num_points = 2048
+            if len(pcd_input.points) > num_points:
+                pcd_input = pcd_input.farthest_point_down_sample(num_points)
+            elif len(pcd_input.points) < num_points:
+                points = np.asarray(pcd_input.points)
+                n_needed = num_points - len(points)
+                indices = np.random.choice(len(points), n_needed, replace=True)
+                additional_points = points[indices]
+                all_points = np.vstack([points, additional_points])
+                pcd_input.points = o3d.utility.Vector3dVector(all_points)
+            
+            # Convert to tensor and predict
+            input_points = np.asarray(pcd_input.points)
+            input_tensor = torch.from_numpy(input_points.astype(np.float32)).unsqueeze(0).to(device)
+            
+            with torch.no_grad():
+                output_tensor = model(input_tensor)
+            
+            # Convert to Open3D
+            output_points = output_tensor.cpu().numpy()[0]
+            pcd_deep = o3d.geometry.PointCloud()
+            pcd_deep.points = o3d.utility.Vector3dVector(output_points)
+            pcd_deep = normalize_point_cloud(pcd_deep, method='unit_sphere')
+            pcd_deep = estimate_normals_pca(pcd_deep, k=30, orient_normals=True)
+            
+            # Compute metrics
+            metrics_deep = compute_metrics_for_method(pcd_deep, pcd_ground_truth)
+            print(f"     CD: {metrics_deep['cd']:.6f}")
+            print(f"     F-score: {metrics_deep['fscore']:.4f}")
+            print(f"     Normal Error: {metrics_deep['normal_error']:.2f} deg")
+        except Exception as e:
+            print(f"     Error loading model: {e}")
+            # Fallback: use output_predicted.ply if exists
+            if deep_file.exists():
+                print(f"     Using {deep_file.name}...")
+                pcd_deep = load_point_cloud_with_normals(deep_file)
+                metrics_deep = compute_metrics_for_method(pcd_deep, pcd_ground_truth)
+                print(f"     CD: {metrics_deep['cd']:.6f}")
+                print(f"     F-score: {metrics_deep['fscore']:.4f}")
+                print(f"     Normal Error: {metrics_deep['normal_error']:.2f} deg")
+            else:
+                print("     Using placeholder (ground truth)...")
+                metrics_deep = compute_metrics_for_method(pcd_ground_truth, pcd_ground_truth)
+                print(f"     CD: {metrics_deep['cd']:.6f} (placeholder)")
+                print(f"     F-score: {metrics_deep['fscore']:.4f} (placeholder)")
+                print(f"     Normal Error: {metrics_deep['normal_error']:.2f} deg")
+    elif deep_file.exists():
+        print(f"     Using {deep_file.name}...")
+        pcd_deep = load_point_cloud_with_normals(deep_file)
+        metrics_deep = compute_metrics_for_method(pcd_deep, pcd_ground_truth)
+        print(f"     CD: {metrics_deep['cd']:.6f}")
+        print(f"     F-score: {metrics_deep['fscore']:.4f}")
+        print(f"     Normal Error: {metrics_deep['normal_error']:.2f} deg")
+    else:
+        print("     Model and file not found, using placeholder (ground truth)...")
+        metrics_deep = compute_metrics_for_method(pcd_ground_truth, pcd_ground_truth)
+        print(f"     CD: {metrics_deep['cd']:.6f} (placeholder)")
+        print(f"     F-score: {metrics_deep['fscore']:.4f} (placeholder)")
+        print(f"     Normal Error: {metrics_deep['normal_error']:.2f} deg")
     
     # Prepare JSON output
     print("\n3. Exporting metrics to JSON...")

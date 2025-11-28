@@ -243,7 +243,47 @@ def create_demo_dataset(objects=['sphere', 'cube', 'torus']):
     
     print(f"\nUsing '{main_obj['name']}' as main demo object...")
     
-    # Export main demo files
+    # Export to frontend/public/scenes/ for web interface
+    scenes_dir = Path("frontend/public/scenes")
+    scenes_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\nExporting scenes to: {scenes_dir.absolute()}")
+    
+    for obj_data in all_objects:
+        obj_name = obj_data['name']
+        scene_dir = scenes_dir / obj_name
+        scene_dir.mkdir(exist_ok=True)
+        
+        # Export with standardized names
+        save_point_cloud_ply(
+            obj_data['partial'],
+            scene_dir / "partial.ply",
+            normalize=True
+        )
+        
+        save_point_cloud_ply(
+            obj_data['poisson'],
+            scene_dir / "poisson.ply",
+            normalize=True
+        )
+        
+        save_point_cloud_ply(
+            obj_data['deep_learning'],
+            scene_dir / "deep.ply",
+            normalize=True
+        )
+        
+        # Also export mesh for wireframe
+        save_mesh_ply(
+            obj_data['poisson_mesh'],
+            scene_dir / "poisson_mesh.ply",
+            normalize=True
+        )
+        
+        print(f"  ✓ {obj_name}/ (partial.ply, poisson.ply, deep.ply, poisson_mesh.ply)")
+    
+    # Also export main demo files for backward compatibility
+    print(f"\nExporting main demo files (backward compatibility)...")
     save_point_cloud_ply(
         main_obj['partial'],
         output_dir / "input_partial.ply",
@@ -272,51 +312,20 @@ def create_demo_dataset(objects=['sphere', 'cube', 'torus']):
     )
     print(f"  ✓ output_predicted.ply")
     
-    # Option 2: Export individual object files
-    print(f"\nExporting individual object files...")
-    for obj_data in all_objects:
-        obj_name = obj_data['name']
-        obj_dir = output_dir / obj_name
-        obj_dir.mkdir(exist_ok=True)
-        
-        save_point_cloud_ply(
-            obj_data['partial'],
-            obj_dir / "input_partial.ply",
-            normalize=True
-        )
-        
-        save_point_cloud_ply(
-            obj_data['poisson'],
-            obj_dir / "poisson_reconstruction.ply",
-            normalize=True
-        )
-        
-        save_mesh_ply(
-            obj_data['poisson_mesh'],
-            obj_dir / "poisson_mesh.ply",
-            normalize=True
-        )
-        
-        save_point_cloud_ply(
-            obj_data['deep_learning'],
-            obj_dir / "output_predicted.ply",
-            normalize=True
-        )
-        
-        print(f"  ✓ {obj_name}/ (4 files)")
-    
     print("\n" + "=" * 60)
     print("Dataset created successfully!")
     print("=" * 60)
-    print(f"\nFiles saved in: {output_dir.absolute()}")
+    print(f"\nFiles saved in:")
+    print(f"  - {output_dir.absolute()} (main demo files)")
+    print(f"  - {scenes_dir.absolute()} (scene files for web interface)")
     print("\nMain demo files:")
     print("  - input_partial.ply")
     print("  - poisson_reconstruction.ply")
     print("  - poisson_mesh.ply")
     print("  - output_predicted.ply")
-    print("\nIndividual object files:")
+    print("\nScene files (for web interface):")
     for obj_data in all_objects:
-        print(f"  - {obj_data['name']}/ (4 files each)")
+        print(f"  - scenes/{obj_data['name']}/ (partial.ply, poisson.ply, deep.ply, poisson_mesh.ply)")
     print("\nYou can now use these files in the web interface!")
 
 

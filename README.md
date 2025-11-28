@@ -110,6 +110,23 @@ python backend/notebooks/create_demo_files.py
 
 Both scripts create PLY files in `exports/` directory.
 
+### Train Simple Deep Learning Model
+
+Train a minimal PointNet autoencoder to generate Deep Learning predictions:
+
+```bash
+conda activate sparse-lidar
+python backend/notebooks/train_simple_ae.py
+```
+
+This will:
+- Create training data from 3 simple objects (sphere, cube, torus)
+- Train a PointNet autoencoder for 50 epochs
+- Generate `output_predicted.ply` with model predictions
+- Save the trained model to `exports/simple_ae_model.pth`
+
+**Note:** This is a minimal model for demonstration. For production, use the full Sparse UNet architecture.
+
 ### Compute Metrics
 
 After generating demo files, compute evaluation metrics:

@@ -3,7 +3,7 @@
  * Shows: Partial cloud, Poisson reconstruction, Deep Learning reconstruction
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadPLY, loadPLYFromFile, loadPLYMesh } from '../utils/loaders.js';
@@ -41,6 +41,84 @@ export default function ComparisonViewer() {
   const poissonMeshRef = useRef(null);
   const [showMetrics, setShowMetrics] = useState(false);
   const [metrics, setMetrics] = useState(null);
+  const [selectedScene, setSelectedScene] = useState('sphere');
+  const [availableScenes, setAvailableScenes] = useState(['sphere', 'cube', 'torus']);
+  const isInitialMount = useRef(true);
+
+  // Define loadScene function before it's used in useEffect
+  const loadScene = useCallback(async (sceneName) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Load files from /scenes/{sceneName}/
+      const basePath = `/scenes/${sceneName}`;
+      const files = {
+        partial: `${basePath}/partial.ply`,
+        poisson: `${basePath}/poisson.ply`,
+        deepLearning: `${basePath}/deep.ply`
+      };
+
+      // Load files sequentially
+      const newLoadedClouds = {};
+      const newNormals = {};
+      
+      for (const [type, path] of Object.entries(files)) {
+        try {
+          const { points, normals: normalsArray } = await loadPLY(path);
+          
+          // Center and scale
+          const box = new THREE.Box3().setFromObject(points);
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          
+          points.geometry.translate(-center.x, -center.y, -center.z);
+          points.geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
+
+          newLoadedClouds[type] = points;
+          newNormals[type] = normalsArray;
+        } catch (err) {
+          console.warn(`Could not load ${type} from ${path}:`, err);
+        }
+      }
+
+      // Update state with all loaded clouds and normals
+      setLoadedClouds(newLoadedClouds);
+      setNormals(newNormals);
+
+      // Try to load Poisson mesh
+      try {
+        const mesh = await loadPLYMesh(`${basePath}/poisson_mesh.ply`);
+        
+        // Center and scale mesh (same as point clouds)
+        const box = new THREE.Box3().setFromObject(mesh);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        mesh.geometry.translate(-center.x, -center.y, -center.z);
+        mesh.geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
+        
+        poissonMeshRef.current = mesh;
+        console.log('Poisson mesh loaded successfully');
+      } catch (err) {
+        console.warn('Could not load Poisson mesh:', err);
+      }
+
+      // Set default view if any cloud was loaded
+      const hasAnyCloud = Object.values(newLoadedClouds).some(cloud => cloud !== null);
+      if (hasAnyCloud) {
+        setViewMode(VIEW_MODES.SIDE_BY_SIDE);
+      } else {
+        setError(`Could not load scene "${sceneName}". Files may not exist.`);
+      }
+    } catch (err) {
+      setError(`Failed to load scene "${sceneName}": ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Initialize Three.js scene
@@ -107,12 +185,53 @@ export default function ComparisonViewer() {
     };
   }, []);
 
-  // Load demo files automatically on mount
+  // Load available scenes on mount
   useEffect(() => {
-    if (sceneRef.current) {
-      loadDefaultFiles();
+    // Try to detect available scenes by checking if directories exist
+    const checkScenes = async () => {
+      const scenes = ['sphere', 'cube', 'torus'];
+      const available = [];
+      
+      for (const scene of scenes) {
+        try {
+          const response = await fetch(`/scenes/${scene}/partial.ply`, { method: 'HEAD' });
+          if (response.ok) {
+            available.push(scene);
+          }
+        } catch (e) {
+          // Scene not available
+        }
+      }
+      
+      if (available.length > 0) {
+        setAvailableScenes(available);
+        setSelectedScene(available[0]);
+        // Load first scene automatically
+        if (sceneRef.current) {
+          loadScene(available[0]);
+        }
+      }
+    };
+    
+    // Wait a bit for Three.js to initialize
+    const timer = setTimeout(() => {
+      checkScenes();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Load scene when selectedScene changes (but not on initial mount)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
-  }, [sceneRef.current]);
+    
+    if (sceneRef.current && selectedScene) {
+      loadScene(selectedScene);
+    }
+  }, [selectedScene, loadScene]);
 
   // Create normals visualization
   const createNormalsGroup = (points, normalsArray, color) => {
@@ -402,75 +521,9 @@ export default function ComparisonViewer() {
   };
 
   const loadDefaultFiles = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Try to load from public/exports directory (served by Vite)
-      const files = {
-        partial: '/exports/input_partial.ply',
-        poisson: '/exports/poisson_reconstruction.ply',
-        deepLearning: '/exports/output_predicted.ply'
-      };
-
-      // Load files sequentially
-      const newLoadedClouds = { ...loadedClouds };
-      const newNormals = { ...normals };
-      
-      for (const [type, path] of Object.entries(files)) {
-        try {
-          const { points, normals: normalsArray } = await loadPLY(path);
-          
-          // Center and scale
-          const box = new THREE.Box3().setFromObject(points);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          
-          points.geometry.translate(-center.x, -center.y, -center.z);
-          points.geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
-
-          newLoadedClouds[type] = points;
-          newNormals[type] = normalsArray;
-        } catch (err) {
-          console.warn(`Could not load ${type} from ${path}:`, err);
-        }
-      }
-
-      // Update state with all loaded clouds and normals
-      setLoadedClouds(newLoadedClouds);
-      setNormals(newNormals);
-
-      // Try to load Poisson mesh
-      try {
-        const mesh = await loadPLYMesh('/exports/poisson_mesh.ply');
-        
-        // Center and scale mesh (same as point clouds)
-        const box = new THREE.Box3().setFromObject(mesh);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        
-        mesh.geometry.translate(-center.x, -center.y, -center.z);
-        mesh.geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
-        
-        poissonMeshRef.current = mesh;
-        console.log('Poisson mesh loaded successfully');
-      } catch (err) {
-        console.warn('Could not load Poisson mesh:', err);
-      }
-
-      // Set default view if any cloud was loaded
-      const hasAnyCloud = Object.values(newLoadedClouds).some(cloud => cloud !== null);
-      if (hasAnyCloud) {
-        setViewMode(VIEW_MODES.SIDE_BY_SIDE);
-      } else {
-        setError('Could not load demo files. Please use file upload buttons.');
-      }
-    } catch (err) {
-      setError(`Failed to load default files: ${err.message}`);
-    } finally {
-      setIsLoading(false);
+    // Legacy function - now redirects to loadScene
+    if (selectedScene) {
+      await loadScene(selectedScene);
     }
   };
 
@@ -508,15 +561,44 @@ export default function ComparisonViewer() {
           Interactive 3D visualization comparing partial input, Poisson reconstruction, and Deep Learning completion.
         </p>
 
-        {/* Load default files button */}
+        {/* Scene selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>
+            Select Scene:
+          </label>
+          <select
+            value={selectedScene}
+            onChange={(e) => setSelectedScene(e.target.value)}
+            disabled={isLoading}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}
+          >
+            {availableScenes.map(scene => (
+              <option key={scene} value={scene}>
+                {scene.charAt(0).toUpperCase() + scene.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Load scene button */}
         <button
-          onClick={loadDefaultFiles}
+          onClick={() => loadScene(selectedScene)}
           disabled={isLoading}
           style={{
             width: '100%',
             padding: '12px',
             marginBottom: '20px',
-            background: isLoading ? '#666' : '#333',
+            background: isLoading ? '#666' : '#4ecdc4',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -525,96 +607,99 @@ export default function ComparisonViewer() {
             fontWeight: 'bold'
           }}
         >
-          {isLoading ? 'Loading...' : 'Load Demo Files'}
+          {isLoading ? 'Loading...' : 'Load Selected Scene'}
         </button>
 
-        {/* File loaders */}
-        <div style={{ marginBottom: '20px' }}>
-          <h3 style={{ fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>Load Files:</h3>
-          
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1', minWidth: '100px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
-                Partial (Red)
-              </label>
-              <label
-                style={{
-                  display: 'block',
-                  padding: '8px 12px',
-                  background: '#ff6b6b',
-                  color: 'white',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  textAlign: 'center'
-                }}
-              >
-                Choose File
-                <input
-                  type="file"
-                  accept=".ply"
-                  onChange={(e) => handleFileSelect(e, 'partial')}
-                  disabled={isLoading}
-                  style={{ display: 'none' }}
-                />
-              </label>
-            </div>
+        {/* File loaders (optional, for custom files) */}
+        <details style={{ marginBottom: '20px' }}>
+          <summary style={{ fontSize: '14px', marginBottom: '10px', opacity: 0.9, cursor: 'pointer' }}>
+            Load Custom Files (Optional)
+          </summary>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1', minWidth: '100px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
+                  Partial (Red)
+                </label>
+                <label
+                  style={{
+                    display: 'block',
+                    padding: '8px 12px',
+                    background: '#ff6b6b',
+                    color: 'white',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    textAlign: 'center'
+                  }}
+                >
+                  Choose File
+                  <input
+                    type="file"
+                    accept=".ply"
+                    onChange={(e) => handleFileSelect(e, 'partial')}
+                    disabled={isLoading}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
 
-            <div style={{ flex: '1', minWidth: '100px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
-                Poisson (Cyan)
-              </label>
-              <label
-                style={{
-                  display: 'block',
-                  padding: '8px 12px',
-                  background: '#4ecdc4',
-                  color: 'white',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  textAlign: 'center'
-                }}
-              >
-                Choose File
-                <input
-                  type="file"
-                  accept=".ply"
-                  onChange={(e) => handleFileSelect(e, 'poisson')}
-                  disabled={isLoading}
-                  style={{ display: 'none' }}
-                />
-              </label>
-            </div>
+              <div style={{ flex: '1', minWidth: '100px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
+                  Poisson (Cyan)
+                </label>
+                <label
+                  style={{
+                    display: 'block',
+                    padding: '8px 12px',
+                    background: '#4ecdc4',
+                    color: 'white',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    textAlign: 'center'
+                  }}
+                >
+                  Choose File
+                  <input
+                    type="file"
+                    accept=".ply"
+                    onChange={(e) => handleFileSelect(e, 'poisson')}
+                    disabled={isLoading}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
 
-            <div style={{ flex: '1', minWidth: '100px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
-                DL (Green)
-              </label>
-              <label
-                style={{
-                  display: 'block',
-                  padding: '8px 12px',
-                  background: '#95e1d3',
-                  color: 'white',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  textAlign: 'center'
-                }}
-              >
-                Choose File
-                <input
-                  type="file"
-                  accept=".ply"
-                  onChange={(e) => handleFileSelect(e, 'deepLearning')}
-                  disabled={isLoading}
-                  style={{ display: 'none' }}
-                />
-              </label>
+              <div style={{ flex: '1', minWidth: '100px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', opacity: 0.8 }}>
+                  DL (Green)
+                </label>
+                <label
+                  style={{
+                    display: 'block',
+                    padding: '8px 12px',
+                    background: '#95e1d3',
+                    color: 'white',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    textAlign: 'center'
+                  }}
+                >
+                  Choose File
+                  <input
+                    type="file"
+                    accept=".ply"
+                    onChange={(e) => handleFileSelect(e, 'deepLearning')}
+                    disabled={isLoading}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
             </div>
           </div>
-        </div>
+        </details>
 
         {/* Show normals button */}
         <div style={{ marginBottom: '20px' }}>
