@@ -65,7 +65,11 @@ export default function ComparisonViewer() {
       
       for (const [type, path] of Object.entries(files)) {
         try {
-          const { points, normals: normalsArray } = await loadPLY(path);
+          // Ensure path starts with / for Vercel compatibility
+          const absolutePath = path.startsWith('/') ? path : `/${path}`;
+          console.log(`Loading ${type} from: ${absolutePath}`);
+          
+          const { points, normals: normalsArray } = await loadPLY(absolutePath);
           
           // Center and scale
           const box = new THREE.Box3().setFromObject(points);
@@ -78,8 +82,9 @@ export default function ComparisonViewer() {
 
           newLoadedClouds[type] = points;
           newNormals[type] = normalsArray;
+          console.log(`Successfully loaded ${type}: ${points.geometry.attributes.position.count} points`);
         } catch (err) {
-          console.warn(`Could not load ${type} from ${path}:`, err);
+          console.error(`Could not load ${type} from ${path}:`, err);
         }
       }
 
@@ -89,7 +94,10 @@ export default function ComparisonViewer() {
 
       // Try to load Poisson mesh
       try {
-        const mesh = await loadPLYMesh(`${basePath}/poisson_mesh.ply`);
+        const meshPath = `${basePath}/poisson_mesh.ply`;
+        const absoluteMeshPath = meshPath.startsWith('/') ? meshPath : `/${meshPath}`;
+        console.log(`Loading Poisson mesh from: ${absoluteMeshPath}`);
+        const mesh = await loadPLYMesh(absoluteMeshPath);
         
         // Center and scale mesh (same as point clouds)
         const box = new THREE.Box3().setFromObject(mesh);
@@ -194,12 +202,18 @@ export default function ComparisonViewer() {
       
       for (const scene of scenes) {
         try {
-          const response = await fetch(`/scenes/${scene}/partial.ply`, { method: 'HEAD' });
+          // Ensure path starts with / for Vercel compatibility
+          const scenePath = `/scenes/${scene}/partial.ply`;
+          console.log(`Checking scene availability: ${scenePath}`);
+          const response = await fetch(scenePath, { method: 'HEAD' });
           if (response.ok) {
             available.push(scene);
+            console.log(`Scene "${scene}" is available`);
+          } else {
+            console.warn(`Scene "${scene}" returned status ${response.status}`);
           }
         } catch (e) {
-          // Scene not available
+          console.warn(`Scene "${scene}" not available:`, e);
         }
       }
       
