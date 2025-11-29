@@ -53,6 +53,13 @@ data/
 *.h5
 *.hdf5
 
+# Exception: Allow PLY files in frontend/public/scenes/ for demo
+!frontend/
+!frontend/public/
+!frontend/public/scenes/
+!frontend/public/scenes/**/
+!frontend/public/scenes/**/*.ply
+
 # Models and checkpoints
 *.pth
 *.pt
